@@ -60,15 +60,38 @@ class MultiHeadAttention(nn.Module):
 
         return self.out_proj(out)
 
+torch.manual_seed(42)
 
 model = MultiHeadAttention(
-    d_model=4096,
-    num_heads=32
+    d_model=8,
+    num_heads=2
 )
 
-x = torch.randn(2, 4, 4096)
+x = torch.randn(2, 4,8)
 
 output = model(x)
 
 print(output.shape)
-# torch.Size([2, 4, 4096])
+
+import torch.nn.functional as F
+
+B, T, D = x.shape
+H = model.num_heads
+d = model.head_dim
+
+q = model.q_proj(x).reshape(B, T, H, d).transpose(1, 2)
+k = model.k_proj(x).reshape(B, T, H, d).transpose(1, 2)
+v = model.v_proj(x).reshape(B, T, H, d).transpose(1, 2)
+
+ref = F.scaled_dot_product_attention(
+    q, k, v, is_causal=True, dropout_p=0.0
+)
+
+ref = ref.transpose(1, 2).contiguous().reshape(B, T, D)
+ref = model.out_proj(ref)
+
+torch.testing.assert_close(
+    output, ref, rtol=1e-4, atol=1e-5
+)
+
+print("Correct!")
