@@ -1,7 +1,6 @@
-from typing import Any
-
 import torch
 import torch.nn as nn
+
 
 class MultiHeadAttention(nn.Module):
     def __init__(self, d_model, num_heads):
@@ -38,10 +37,11 @@ class MultiHeadAttention(nn.Module):
 
         # shape - (B, H, T, T)
 
-        # Casual masking
+        # Causal masking: token i may only attend to j <= i.
+        # NOTE: this must be .tril(). A plain torch.ones() masks nothing.
         mask = torch.ones(
             T, T, device=x.device, dtype=torch.bool
-        )
+        ).tril()
 
         scores = score.masked_fill(~mask, float("-inf"))
 
@@ -53,45 +53,55 @@ class MultiHeadAttention(nn.Module):
 
         # shape - (B, H, T, d)
 
-        # Merge hards back togethar
+        # Merge heads back together
         out = out.to(x.dtype)
         out = out.transpose(1, 2).contiguous()
         out = out.reshape(B, T, D)
 
         return self.out_proj(out)
 
-torch.manual_seed(42)
 
-model = MultiHeadAttention(
-    d_model=8,
-    num_heads=2
-)
+if __name__ == "__main__":
+    import torch.nn.functional as F
 
-x = torch.randn(2, 4,8)
+    torch.manual_seed(42)
 
-output = model(x)
+    model = MultiHeadAttention(
+        d_model=8,
+        num_heads=2
+    )
 
-print(output.shape)
+    x = torch.randn(2, 4, 8)
 
-import torch.nn.functional as F
+    output = model(x)
 
-B, T, D = x.shape
-H = model.num_heads
-d = model.head_dim
+    print(output.shape)
 
-q = model.q_proj(x).reshape(B, T, H, d).transpose(1, 2)
-k = model.k_proj(x).reshape(B, T, H, d).transpose(1, 2)
-v = model.v_proj(x).reshape(B, T, H, d).transpose(1, 2)
+    B, T, D = x.shape
+    H = model.num_heads
+    d = model.head_dim
 
-ref = F.scaled_dot_product_attention(
-    q, k, v, is_causal=True, dropout_p=0.0
-)
+    q = model.q_proj(x).reshape(B, T, H, d).transpose(1, 2)
+    k = model.k_proj(x).reshape(B, T, H, d).transpose(1, 2)
+    v = model.v_proj(x).reshape(B, T, H, d).transpose(1, 2)
 
-ref = ref.transpose(1, 2).contiguous().reshape(B, T, D)
-ref = model.out_proj(ref)
+    ref = F.scaled_dot_product_attention(
+        q, k, v, is_causal=True, dropout_p=0.0
+    )
 
-torch.testing.assert_close(
-    output, ref, rtol=1e-4, atol=1e-5
-)
+    ref = ref.transpose(1, 2).contiguous().reshape(B, T, D)
+    ref = model.out_proj(ref)
 
-print("Correct!")
+    torch.testing.assert_close(
+        output, ref, rtol=1e-4, atol=1e-5
+    )
+
+    # Stronger than comparing to SDPA: change the FUTURE and check that the
+    # past does not move. This is what actually proves causality.
+    y = x.clone()
+    y[0, -1] += 100.0
+    moved = model(y)
+    assert torch.allclose(output[0, :-1], moved[0, :-1], atol=1e-5)
+    assert not torch.allclose(output[0, -1], moved[0, -1], atol=1e-5)
+
+    print("Correct!")

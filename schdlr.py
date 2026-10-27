@@ -34,8 +34,6 @@ class BlockPool:
 class Request:
     req_id: int
     tokens: list[int]
-    max_tokens: int = 8
-
     block_table: list[Block] = field(default_factory=list)
     num_computed_tokens: int = 0
 
@@ -147,7 +145,7 @@ class Scheduler:
                 items.append(self._make_item(req, n))
                 budget -= n
 
-            return items
+        return items
 
     def _preemt(self, req: Request, to_fit: str) -> None:
 
