@@ -1,7 +1,8 @@
 # KV Cache Allocator — Interview Playbook
 
-Companion to [`kv_cache_manager.py`](kv_cache_manager.py). Read the code once,
-then practice the whiteboard skeleton in §4 from memory.
+Companion to the `KVCacheManager` half of [`engine.py`](engine.py) — the one
+file worth memorizing. Read it once, then practice the whiteboard skeleton in
+§4 from memory.
 
 ---
 
@@ -155,7 +156,7 @@ class KVAlloc:
 
 1. **Caching the last block.** `while n + B <= len(toks)` instead of
    `<= len(toks) - 1`. Full reuse → nothing to compute → no logits.
-   *(This is the bug in your `allocator_with_prefix_caching.py:62`.)*
+   *(This is the bug in your `archive/allocator_with_prefix_caching.py:62`.)*
 2. **Forgetting to remove a hit block from the free list.** Then the next
    `allocate` hands the *same physical block* to a different request. Silent
    KV corruption — the worst possible bug here.
@@ -227,12 +228,15 @@ Then four scenarios, in this order (all implemented in the demo):
 
 ---
 
-## 10. What was wrong with the two earlier drafts
+## 10. What was wrong with the two earliest drafts
+
+Both now live in [`archive/`](archive/). Kept only because the failure modes are
+instructive.
 
 | File | Problem |
 |---|---|
-| [`allocator.py`](allocator.py) | line 18 `deque([KVBlock])` stores the *class*, not instances → `len(free)` is 1 → first `allocate` raises `MemoryError`. Also no ref counting, no cache, raises instead of returning `False`. |
-| [`allocator_with_prefix_caching.py`](allocator_with_prefix_caching.py) | truncated at line 154 (`def assert_invariants` with no body) → won't parse. Logic is otherwise close; the real bug is line 62 reusing the last block. |
+| [`archive/allocator.py`](archive/allocator.py) | line 18 `deque([KVBlock])` stores the *class*, not instances → `len(free)` is 1 → first `allocate` raises `MemoryError`. Also no ref counting, no cache, raises instead of returning `False`. |
+| [`archive/allocator_with_prefix_caching.py`](archive/allocator_with_prefix_caching.py) | truncated at line 154 (`def assert_invariants` with no body) → won't parse. Logic is otherwise close; the real bug is line 62 reusing the last block. |
 
 Good ideas worth keeping from them: `scope` in the hash, `_empty` separate from
 `_evictable`, `mark_computed` as an explicit publish step, and `blake2b` for
