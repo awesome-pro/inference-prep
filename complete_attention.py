@@ -118,7 +118,7 @@ class CachedGQA(nn.Module):
         k_attn = k.repeat_interleave(self.group_size, dim=1)
         v_attn = v.repeat_interleave(self.group_size, dim=1)
 
-        scores = (q.float() @ k.float().transpose(-2, -1)) * (self.head_dim ** -0.5)
+        scores = (q.float() @ k_attn.float().transpose(-2, -1)) * (self.head_dim ** -0.5)
 
         q_pos = torch.arange(past_len, past_len + T_new, device=x.device)
         k_pos = torch.arange(k.size(-2), device=x.device)
@@ -126,7 +126,7 @@ class CachedGQA(nn.Module):
         allowed = k_pos[None, :] <= q_pos[:, None]
         scores = scores.masked_fill(~allowed, float("-inf"))
         weigths = torch.softmax(scores, dim=-1)
-        out = (weigths @ v.float()).to(x.dtype)
+        out = (weigths @ v_attn.float()).to(x.dtype)
         out = out.transpose(1, 2).contiguous().reshape(B, T_new, D)
         return self.out_proj(out)
 
