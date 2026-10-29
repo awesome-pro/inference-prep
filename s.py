@@ -6,21 +6,21 @@ def sample(logits: torch.Tensor, temperature: torch.Tensor, top_k: torch.Tensor,
     # temperature
     logits = logits / temperature.clamp(min=1e-5).unsqueeze(1)
 
-    # Short ones. After this, position == rank and both filters are masks
+    # After this position == rank and both filters are masks
     sorted_logits, order = logits.sort(dim=-1, descending=True)
-    probs = sorted_logits.softmax(dim=-1)
-    mass_before = probs.cumsum(dim=-1) - probs
+    sorted_probs = sorted_logits.softmax(dim=-1)
+    mass_before = sorted_probs.cumsum(dim=-1) - sorted_probs
 
-    # 3. top k
+    # top k
     vocab = logits.shape[-1]
     k = torch.where(top_k <= 0, vocab, top_k).clamp(max=vocab)
     keep = torch.arange(vocab) < k.unsqueeze(1)
 
-    # 4. top p
-    keep &= mass_before <= k.unsqueeze(1)
+    # top p
+    keep = keep & (mass_before <= top_p.unsqueeze(1))
 
-    # 5. mask, renormalize, draw
-    probs = probs.masked_fill(~keep, 0.0)
+    # mask renormalize, draw
+    probs = sorted_probs.masked_fill(~keep, 0.0)
     probs = probs / probs.sum(dim=-1, keepdim=True)
 
     rank = torch.multinomial(probs, num_samples=1)
