@@ -1,22 +1,36 @@
-
 import torch
+from torch import nn
+from torch.profiler import profile, ProfilerActivity, record_function
 
-x = torch.tensor([10.0, 20.0, 30.0, 40.0])
+torch.set_num_threads(4)
 
-pairs = x.reshape(2, 2)
-print("Pairs:\n", pairs)
+model = nn.Sequential(
+    nn.Linear(512, 2048),
+    nn.GELU(),
+    nn.Linear(2048, 512),
+).eval()
 
-first = pairs[:, 0]
-second = pairs[:, 1]
+x = torch.randn(256, 512)
 
-print("First:", first)
-print("Second:", second)
+# Warmup
+with torch.inference_mode():
+    for _ in range(10):
+        model(x)
 
-cos_angle = 0.5403
-sin_angle = 0.8415
+# Profile CPU tensor operations
+with torch.inference_mode():
+    with profile(
+        activities=[ProfilerActivity.CPU],
+        record_shapes=True,
+        profile_memory=True,
+    ) as prof:
+        for _ in range(20):
+            with record_function("model_forward"):
+                model(x)
 
-new_first = first * cos_angle - second * sin_angle
-new_second = first * sin_angle + second * cos_angle
-
-print("Rotated first:", new_first)
-print("Rotated second:", new_second)
+print(
+    prof.key_averages().table(
+        sort_by="self_cpu_time_total",
+        row_limit=15,
+    )
+)
