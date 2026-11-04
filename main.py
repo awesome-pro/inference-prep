@@ -1,12 +1,16 @@
-import torch
+import asyncio
+import aiohttp
 
-x = torch.arange(12).reshape(3, 4)
-print(x.shape)     # (3, 4)
-print(x.stride())   # (4, 1)
+async def fetch(session, url):
+    async with session.get(url) as response:
+        return await response.text()
 
-y = x.transpose(0, 1)
-print(y.shape)            # (4, 3)
-print(y.stride())         # (1, 4)
-print(y.is_contiguous())  # False
+async def main():
+    async with aiohttp.ClientSession() as session:
+        tasks = [
+            fetch(session, url) for url in urls
+        ]
 
-z = y.view(12)  # RuntimeError
+        results = await asyncio.gather(*tasks)
+
+asyncio.run(main())
